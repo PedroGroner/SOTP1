@@ -2,13 +2,22 @@
 #include <stdio.h>
 #include <time.h>
 #include <math.h>
+#include <pthread.h>
 
 #define MATRIZ_LINHA 10000
 #define MATRIZ_COLUNA 10000
-#define BLOCO_LINHA 100
-#define BLOCO_COLUNA 100
+#define BLOCO_LINHA 1000
+#define BLOCO_COLUNA 1000
 
 int **matriz;
+int totalPrimosParalelo = 0;
+int blocoAtual = 0; 
+pthread_mutex_t mutex_bloco;
+pthread_mutex_t mutex_soma;
+// rapaziada, o serial ta sendo bem mais rapido que o paralelo, eu imagino que isso seja comum
+// levando em conta que tenho um processador parrudo, qualquer coisa 
+// alterem o codigo com o nucleo de voces, se forem diferente de 8 no caso, imagino que se for o msm nao vá mudar mt coisa
+
 // funcoes 
 
 void preencheMatrizes(){
@@ -92,20 +101,81 @@ void BuscaSerial(){
     }
 }
 
+void *BuscaParalela( void *arg){
+
+    int total_blocos_linha = (MATRIZ_COLUNA + BLOCO_COLUNA - 1) / BLOCO_COLUNA;
+    int total_blocos_coluna = (MATRIZ_LINHA + BLOCO_LINHA - 1) / BLOCO_LINHA;
+    int total_blocos = total_blocos_linha * total_blocos_coluna;
+
+    while (1){
+
+        pthread_mutex_lock(&mutex_bloco);
+        int bolsoBloco = blocoAtual;
+        blocoAtual++;
+        pthread_mutex_unlock(&mutex_bloco);
+
+        if(bolsoBloco >= total_blocos) break;
+
+        int start_i = (bolsoBloco / total_blocos_linha) * BLOCO_LINHA;
+        int start_j = (bolsoBloco % total_blocos_linha) * BLOCO_COLUNA;
+        int end_i = start_i + BLOCO_LINHA > MATRIZ_LINHA ? MATRIZ_LINHA : start_i + BLOCO_LINHA;
+        int end_j = start_j + BLOCO_COLUNA > MATRIZ_COLUNA ? MATRIZ_COLUNA : start_j + BLOCO_COLUNA;
+        int local_primos = 0;
+        for (int i = start_i; i < end_i; i++) {
+            for (int j = start_j; j < end_j; j++) {
+                if (ehPrimo(matriz[i][j])) local_primos++;
+            }
+        }
+        
+        pthread_mutex_lock(&mutex_soma);
+        totalPrimosParalelo += local_primos;
+        pthread_mutex_unlock(&mutex_soma);
+
+    }
+    
+    return NULL;
+
+}
+
 int main (void){
 
     matriz = alocar_matrizes(MATRIZ_LINHA, MATRIZ_COLUNA);
-    
+
 
     if (matriz == NULL){
         return 1;
     }
 
     preencheMatrizes();
+
+    // serial
     clock_t inicio_Contagem = clock();
     BuscaSerial();
     clock_t fim_contagem = clock();
     double tempototal = (double)(fim_contagem - inicio_Contagem) / CLOCKS_PER_SEC;
     printf("Tempo da busca serial: %f segundos \n", tempototal);
+
+    // paralela
+    int num_threads = 8;
+    pthread_t threads[num_threads];
+    pthread_mutex_init(&mutex_bloco, NULL);
+    pthread_mutex_init(&mutex_soma, NULL);
+
+    inicio_Contagem = clock();
+    for(int i = 0; i < num_threads; i++) {
+        pthread_create(&threads[i], NULL, BuscaParalela, NULL);
+    }
+    
+    for(int i = 0; i < num_threads; i++) {
+        pthread_join(threads[i], NULL);
+    }
+    fim_contagem = clock();
+    tempototal = (double)(fim_contagem - inicio_Contagem) / CLOCKS_PER_SEC;
+    printf("Tempo da busca paralela: %f segundos \n", tempototal);
+
+    pthread_mutex_destroy(&mutex_bloco);
+    pthread_mutex_destroy(&mutex_soma);
+
+    return 0;
 
 }
