@@ -64,7 +64,12 @@ int ehPrimo(int n){
     return 1;
 }
 
-
+/*
+* Aloca dinamicamente a matriz (global) com os tamanhos definidos no #define.
+*
+* @param m Número de linhas da matriz.
+* @param n Número de colunas da matriz.
+*/
 int **alocar_matrizes (int m, int n){
 
    int **v;
@@ -91,6 +96,12 @@ int **alocar_matrizes (int m, int n){
    return (v);
 }
 
+/*
+* Libera a matriz (global) da memória.
+*
+* @param m Número de linhas da matriz.
+* @param n Número de colunas da matriz.
+*/
 void Liberar_matriz(int m, int n, int **v){
     if (v == NULL) return;
     if (m < 1|| n < 1){
@@ -98,11 +109,17 @@ void Liberar_matriz(int m, int n, int **v){
         return;
     }
 
-    for (int i;=0; i < m; i++) free (v[i]);
+    for (int i=0; i < m; i++) free (v[i]);
 
     free (v);
 }
 
+/*
+* Libera a matriz (global) da memória.
+*
+* @param m Número de linhas da matriz.
+* @param n Número de colunas da matriz.
+*/
 void BuscaSerial(){
     totalPrimo = 0;
     for (int i = 0; i < MATRIZ_LINHA; i++){
@@ -142,9 +159,7 @@ void *BuscaParalela( void *arg){
         totalPrimosParalelo += local_primos;
         pthread_mutex_unlock(&mutex_soma);
     }
-    
     return NULL;
-
 }
 
 int menu(){
