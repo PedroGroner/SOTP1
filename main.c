@@ -8,7 +8,6 @@
 #define MATRIZ_COLUNA 10000
 #define BLOCO_LINHA 1000
 #define BLOCO_COLUNA 1000
-#define NUM_THREADS 4
 
 // =================
 // VARIÁVEIS GLOBAIS
@@ -24,8 +23,24 @@ int blocoAtual = 0;
 pthread_mutex_t mutex_bloco;
 pthread_mutex_t mutex_soma;
 
+/*
+int n_resultados = 0;
+ResultadoBenchmark *resultados = NULL;
+ResultadoBenchmark resultado_serial = { .num_threads = 0, .tempo = 0.0, .total_primos = 0 };
+
 // =================
-// FUNÇÕES
+// STRUCT DE RESULTADOS
+// =================
+
+typedef struct {
+    int    num_threads;
+    double tempo;
+    int    total_primos;
+} ResultadoBenchmark;
+*/
+
+// =================
+// FUNÇÕES PRINCIPAIS
 // =================
 
 /*
@@ -45,7 +60,7 @@ void preencherMatriz(){
 * Verifica se o número é primo.
 *
 * @param n Número a ser comparado
-* @return 1 para Primo, 0 para Não-primo
+* @return 1 para Primo; 0 para Não-primo
 */
 int ehPrimo(int n){
     int limite;
@@ -115,12 +130,10 @@ void Liberar_matriz(int m, int n, int **v){
 }
 
 /*
-* Libera a matriz (global) da memória.
-*
-* @param m Número de linhas da matriz.
-* @param n Número de colunas da matriz.
+* Faz a busca serial por números primos na matriz (global).
+* Altera valor da variável global totalPrimo (global).
 */
-void BuscaSerial(){
+void BuscaSerial() {
     totalPrimo = 0;
     for (int i = 0; i < MATRIZ_LINHA; i++){
         for (int j = 0; j < MATRIZ_COLUNA; j++){
@@ -131,7 +144,11 @@ void BuscaSerial(){
     }
 }
 
-void *BuscaParalela( void *arg){
+/*
+* Define o bloco de trabalho da thread na matriz (global).
+* Altera valor da variável global totalPrimoParalelo (global).
+*/
+void *BuscaThread(void *arg) {
     int total_blocos_linha = (MATRIZ_COLUNA + BLOCO_COLUNA - 1) / BLOCO_COLUNA;
     int total_blocos_coluna = (MATRIZ_LINHA + BLOCO_LINHA - 1) / BLOCO_LINHA;
     int total_blocos = total_blocos_linha * total_blocos_coluna;
@@ -162,23 +179,100 @@ void *BuscaParalela( void *arg){
     return NULL;
 }
 
+/*
+* Faz a busca paralela por números primos na matriz (global).
+* Altera valor da variável global totalPrimoParalelo (global).
+* @param num_threads Número de threads a serem utilizadas na busca paralela.
+*/
+void BuscaParalela(int num_threads) {
+    pthread_t threads[num_threads];
+
+    totalPrimosParalelo = 0;
+    blocoAtual = 0;
+
+    pthread_mutex_init(&mutex_bloco, NULL);
+    pthread_mutex_init(&mutex_soma, NULL);
+
+    for(int i = 0; i < num_threads; i++) {
+        pthread_create(&threads[i], NULL, BuscaThread, NULL);
+    }
+    
+    for(int i = 0; i < num_threads; i++) {
+        pthread_join(threads[i], NULL);
+    }
+
+    pthread_mutex_destroy(&mutex_bloco);
+    pthread_mutex_destroy(&mutex_soma);
+}
+
+
+// =================
+// FUNÇÕES DE INTERAÇÃO COM O USUÁRIO
+// =================
+/*
+* Função de menu para interação com o usuário.
+*/
 int menu(){
     int opcao;
     printf("Escolha uma opção:\n");
     printf("1 - Busca Serial\n");
     printf("2 - Busca Paralela\n");
-    printf("3 - Comparar\n");
+    printf("3 - Comparar (Speedup apenas após Serial)\n");
     printf("0 - Sair\n");
 
     scanf("%d", &opcao);
     return opcao;
 }
 
+void limparTela() {
+    #ifdef _WIN32
+        system("cls");
+    #else
+        system("clear");
+    #endif
+}
+
+/*
+void printResultados() {
+    printf("Resultados dos Benchmarks MATRIX(%d x %d) BLOCO(%d x %d):\n", MATRIZ_LINHA, MATRIZ_COLUNA, BLOCO_LINHA, BLOCO_COLUNA);
+    printf("Threads | Tempo (s) | Total Primos\n");
+    for (int i = 0; i < n_resultados; i++) {
+        printf("%7d | %9.4f | %13d |\n",
+            resultados[i].num_threads,
+            resultados[i].tempo,
+            resultados[i].total_primos
+        );
+    }
+}
+
+/*
+* Função de menu para interação com o usuário.
+*/
+/*
+ResultadoBenchmark *adicionarResultado(int threads, double tempo, int primos) {
+    ResultadoBenchmark *temp = realloc(resultados, (num_resultados + 1) * sizeof(ResultadoBenchmark));
+    
+    if (temp == NULL) {
+        printf("Erro ao alocar memória\n");
+        free(resultados);
+        return NULL;
+    }
+    
+    resultados = temp;
+    resultados[*num_resultados] = (ResultadoBenchmark){
+        .num_threads  = threads,
+        .tempo        = tempo,
+        .total_primos = primos
+    };
+    
+    num_resultados++;
+    return resultados;
+}
+*/
+
 int main (void){
     struct timespec ini_s,ini_p, fim_s, fim_p;
-    
-    int num_threads = 8;
-    pthread_t threads[num_threads];
+    double tempototal_s = 0.0, tempototal_p = 0.0;
 
     // Alocando matriz (MATRIZ_LINHA x MATRIZ_COLUNA) de numeros aleatorios
     matriz = alocar_matrizes(MATRIZ_LINHA, MATRIZ_COLUNA);
@@ -192,50 +286,63 @@ int main (void){
     while (opcao != 0) {
         switch (opcao) {
             case 1:
+                limparTela();
                 printf("Busca Serial selecionada.\n");
                 printf("Processando...\n");
 
-                // serial
                 clock_gettime(CLOCK_MONOTONIC, &ini_s);
-
+                // serial
                 BuscaSerial();
-
                 clock_gettime(CLOCK_MONOTONIC, &fim_s);
 
-                double tempototal_s = (double)(fim_s.tv_sec - ini_s.tv_sec) + (fim_s.tv_nsec - ini_s.tv_nsec) / 1e9;
+                tempototal_s = (double)(fim_s.tv_sec - ini_s.tv_sec) + (fim_s.tv_nsec - ini_s.tv_nsec) / 1e9;
+
+                //resultado_serial = { .num_threads = 1, .tempo = tempototal_s, .total_primos = totalPrimo};
                 printf("Tempo da busca serial: %f segundos \n", tempototal_s);
                 printf("Total de primos encontrados na busca serial: %d\n", totalPrimo);
-                printf("Pressione ENTER para sair...");
-                while (getchar() != '\n'); // limpa buffer
                 break;
+
             case 2:
+                limparTela();
                 printf("Busca Paralela selecionada.\n");
+
+                int num_threads;
+                printf("Digite o número de threads para a busca paralela: ");
+                scanf("%d", &num_threads);
+
                 printf("Processando...\n");
 
-                // paralela
-                pthread_mutex_init(&mutex_bloco, NULL);
-                pthread_mutex_init(&mutex_soma, NULL);
-
                 clock_gettime(CLOCK_MONOTONIC, &ini_p);
-                for(int i = 0; i < num_threads; i++) {
-                    pthread_create(&threads[i], NULL, BuscaParalela, NULL);
-                }
                 
-                for(int i = 0; i < num_threads; i++) {
-                    pthread_join(threads[i], NULL);
-                }
+                BuscaParalela(num_threads);
+
                 clock_gettime(CLOCK_MONOTONIC, &fim_p);
-                double tempototal_p = (double)(fim_p.tv_sec - ini_p.tv_sec) + (fim_p.tv_nsec - ini_p.tv_nsec) / 1e9;
+
+                tempototal_p = (double)(fim_p.tv_sec - ini_p.tv_sec) + (fim_p.tv_nsec - ini_p.tv_nsec) / 1e9;
+
                 printf("Tempo da busca paralela: %f segundos \n", tempototal_p);
                 printf("Total de primos encontrados na busca paralela: %d\n", totalPrimosParalelo);
-                printf("Pressione ENTER para sair...");
-                while (getchar() != '\n'); // limpa buffer
-                getchar();  
+
+                //adicionarResultado(num_threads, tempototal_p, totalPrimosParalelo);
+
                 break;
+
             case 3:
+                limparTela();
                 printf("Comparar selecionada.\n");
-                    printf("Tempo da busca serial: %f segundos \n", tempototal_s);
-                    printf("Tempo da busca paralela: %f segundos \n", tempototal_p);
+                if (tempototal_s == 0.0 || tempototal_p == 0.0) {
+                    printf("Execute a busca serial primeiro para obter o tempo de referência.\n");
+                } else {
+                    printf("%f segundos (Serial) vs %f segundos (Paralelo %d threads)\n", tempototal_s, tempototal_p, num_threads);
+                    printf("Speedup: %.2f%%\n\n", (tempototal_s / tempototal_p) * 100);
+                }
+                /*
+                if (resultado_serial.tempo == 0.0) {
+                    printf("Execute a busca serial primeiro para obter o tempo de referência.\n");
+                } else {
+                    printResultados();
+                }
+                */
                 break;
             default:
                 printf("Opção inválida. Tente novamente.\n");
@@ -245,8 +352,7 @@ int main (void){
 
     Liberar_matriz(MATRIZ_LINHA, MATRIZ_COLUNA, matriz);
 
-    pthread_mutex_destroy(&mutex_bloco);
-    pthread_mutex_destroy(&mutex_soma);
+    //free(resultados);
 
     return 0;
 }
