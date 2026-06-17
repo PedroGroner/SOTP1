@@ -45,13 +45,13 @@ Divide a matriz em macroblocos que é processado pela thread, utilizando mutexes
 ### Linux
 
 ```bash
-gcc main.c -o busca_primos -pthread -lm
+gcc main.c -o main -pthread -lm
 ```
 
 ### Windows (MinGW)
 
 ```bash
-gcc main.c -o busca_primos.exe -pthread -lm
+gcc main.c -o main.exe -pthread -lm
 ```
 
 ## Execução
@@ -59,13 +59,13 @@ gcc main.c -o busca_primos.exe -pthread -lm
 ### Linux
 
 ```bash
-./busca_primos
+./main
 ```
 
 ### Windows
 
 ```bash
-busca_primos.exe
+./main.exe
 ```
 
 ## Bibliotecas Utilizadas
