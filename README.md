@@ -40,6 +40,8 @@ Divide a matriz em macroblocos que é processado pela thread, utilizando mutexes
 
 ## Compilação
 
+**(O código deverá ser compilado sempre que houver alguma alteração nas diretivas que definem os tamanhos da matriz e dos macroblocos.)**
+
 ### Linux
 
 ```bash
