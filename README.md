@@ -6,6 +6,8 @@ Este projeto realiza a comparação do resultado de busca **serial** e **paralel
 
 O programa gera uma matriz preenchida com números aleatórios (de 0 a 32000) e realiza a contagem de números primos presentes nela, permitindo comparar o desempenho da execução sequencial com a execução paralela utilizando múltiplas threads.
 
+Além disso, no processamento paralelo, é implementada exclusão mútua quando necessário à threads acessar variáveis compartilhadas, evitando condições de corrida ou erro ao alocar o bloco para o trabalho.
+
 ## Objetivos
 
 - Implementar uma busca serial por números primos.
@@ -15,7 +17,9 @@ O programa gera uma matriz preenchida com números aleatórios (de 0 a 32000) e 
 
 ## Configuração da Matriz
 
-Para analisar o resultado em diferentes cenários, é necessário a alteração das diretivas que definem o tamanho máximo da Matriz a ser percorrida (MATRIZ_LINHA, MATRIZ_COLUNA) e dos macroblocos a serem utilizados pelas threads (BLOCO_LINHA, BLOCO_COLUNA). Vale ressaltar que a alteração desse valores afeta diretamente no tempo de execução dos dois tipos de busca (Serial, Paralela).
+Para analisar o resultado em diferentes cenários, é necessário a alteração das diretivas que definem o tamanho máximo da Matriz a ser percorrida (MATRIZ_LINHA, MATRIZ_COLUNA) e dos macroblocos a serem utilizados pelas threads (BLOCO_LINHA, BLOCO_COLUNA).
+
+Vale ressaltar que a alteração desse valores afeta diretamente no tempo de execução dos dois tipos de busca (Serial, Paralela). Por padrão, os valores definidos são:
 
 ```c
 #define MATRIZ_LINHA 10000
