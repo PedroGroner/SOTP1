@@ -23,11 +23,6 @@ int blocoAtual = 0;
 pthread_mutex_t mutex_bloco;
 pthread_mutex_t mutex_soma;
 
-/*
-int n_resultados = 0;
-ResultadoBenchmark *resultados = NULL;
-ResultadoBenchmark resultado_serial = { .num_threads = 0, .tempo = 0.0, .total_primos = 0 };
-
 // =================
 // STRUCT DE RESULTADOS
 // =================
@@ -37,7 +32,7 @@ typedef struct {
     double tempo;
     int    total_primos;
 } ResultadoBenchmark;
-*/
+
 
 // =================
 // FUNÇÕES PRINCIPAIS
@@ -147,6 +142,7 @@ void BuscaSerial() {
 /*
 * Define o bloco de trabalho da thread na matriz (global).
 * Altera valor da variável global totalPrimoParalelo (global).
+* @param arg Ponteiro para argumentos da thread (não utilizado) (pthread_create precisa disso).
 */
 void *BuscaThread(void *arg) {
     int total_blocos_linha = (MATRIZ_COLUNA + BLOCO_COLUNA - 1) / BLOCO_COLUNA;
@@ -217,13 +213,16 @@ int menu(){
     printf("Escolha uma opção:\n");
     printf("1 - Busca Serial\n");
     printf("2 - Busca Paralela\n");
-    printf("3 - Comparar (Speedup apenas após Serial)\n");
+    printf("3 - Comparar (Apenas após ambos os benchmarks forem executados)\n");
     printf("0 - Sair\n");
 
     scanf("%d", &opcao);
     return opcao;
 }
 
+/*
+* Função Limpar tela.
+*/
 void limparTela() {
     #ifdef _WIN32
         system("cls");
@@ -233,46 +232,55 @@ void limparTela() {
 }
 
 /*
-void printResultados() {
+* Função que mostra os resultados dos benchmarks feitos durante a execução.
+*/
+void printResultados(ResultadoBenchmark resultados_s, ResultadoBenchmark *resultados_p, int n_resultados) {
     printf("Resultados dos Benchmarks MATRIX(%d x %d) BLOCO(%d x %d):\n", MATRIZ_LINHA, MATRIZ_COLUNA, BLOCO_LINHA, BLOCO_COLUNA);
-    printf("Threads | Tempo (s) | Total Primos\n");
+    printf("Threads | Tempo (s) | Total Primos | Speedup\n");
+    printf(" Serial | %9.4f | %12d | %.2f%%\n", resultados_s.tempo, resultados_s.total_primos, 100.0);
     for (int i = 0; i < n_resultados; i++) {
-        printf("%7d | %9.4f | %13d |\n",
-            resultados[i].num_threads,
-            resultados[i].tempo,
-            resultados[i].total_primos
+        printf("%7d | %9.4f | %12d | %.2f%%\n",
+            resultados_p[i].num_threads,
+            resultados_p[i].tempo,
+            resultados_p[i].total_primos,
+            (resultados_p[i].tempo != 0) ? ((resultados_s.tempo / resultados_p[i].tempo) * 100) : 0
         );
     }
 }
 
 /*
-* Função de menu para interação com o usuário.
+* Função que adiciona o resultado do benchmark paralelo no ponteiro de resultados paralelo.
 */
-/*
-ResultadoBenchmark *adicionarResultado(int threads, double tempo, int primos) {
-    ResultadoBenchmark *temp = realloc(resultados, (num_resultados + 1) * sizeof(ResultadoBenchmark));
+ResultadoBenchmark *adicionarResultado(ResultadoBenchmark *resultados, int *n_resultados, int threads, double tempo, int primos) {
+    ResultadoBenchmark *temp = realloc(resultados, (*n_resultados + 1) * sizeof(ResultadoBenchmark));
     
     if (temp == NULL) {
-        printf("Erro ao alocar memória\n");
-        free(resultados);
+        printf("Erro ao alocar memória resultados paralelos foram limpos...\n");
+        *n_resultados = 0;
         return NULL;
     }
     
     resultados = temp;
-    resultados[*num_resultados] = (ResultadoBenchmark){
+    resultados[*n_resultados] = (ResultadoBenchmark){
         .num_threads  = threads,
         .tempo        = tempo,
         .total_primos = primos
     };
-    
-    num_resultados++;
+
+    (*n_resultados)++;
     return resultados;
 }
-*/
 
-int main (void){
+
+int main (){
+    // Variáveis utilizadas para registro de tempo
     struct timespec ini_s,ini_p, fim_s, fim_p;
     double tempototal_s = 0.0, tempototal_p = 0.0;
+
+    // Variáveis para registro dos resultados
+    ResultadoBenchmark resultado_serial = {0};
+    ResultadoBenchmark *resultados_paralelo = NULL;
+    int n_resultados = 0;
 
     // Alocando matriz (MATRIZ_LINHA x MATRIZ_COLUNA) de numeros aleatorios
     matriz = alocar_matrizes(MATRIZ_LINHA, MATRIZ_COLUNA);
@@ -280,69 +288,68 @@ int main (void){
         return 1;
     }
 
+    // Valores aleatórios até 32000
     preencherMatriz();
 
     int opcao = menu();
     while (opcao != 0) {
         switch (opcao) {
+            // Opção 1: Busca Serial
             case 1:
                 limparTela();
                 printf("Busca Serial selecionada.\n");
                 printf("Processando...\n");
 
+                // Registrando tempo de início e fim da busca serial
                 clock_gettime(CLOCK_MONOTONIC, &ini_s);
-                // serial
                 BuscaSerial();
                 clock_gettime(CLOCK_MONOTONIC, &fim_s);
 
                 tempototal_s = (double)(fim_s.tv_sec - ini_s.tv_sec) + (fim_s.tv_nsec - ini_s.tv_nsec) / 1e9;
 
-                //resultado_serial = { .num_threads = 1, .tempo = tempototal_s, .total_primos = totalPrimo};
                 printf("Tempo da busca serial: %f segundos \n", tempototal_s);
                 printf("Total de primos encontrados na busca serial: %d\n", totalPrimo);
-                break;
 
+                // Salvando Serial
+                resultado_serial = (ResultadoBenchmark){ .num_threads = 1, .tempo = tempototal_s, .total_primos = totalPrimo};
+                break;
+            
+            // Opção 2: Busca Paralela
             case 2:
                 limparTela();
                 printf("Busca Paralela selecionada.\n");
 
+                // Solicitando número de threads para a busca paralela
                 int num_threads;
                 printf("Digite o número de threads para a busca paralela: ");
                 scanf("%d", &num_threads);
 
                 printf("Processando...\n");
 
+                // Registrando tempo de início e fim da busca paralela
                 clock_gettime(CLOCK_MONOTONIC, &ini_p);
-                
                 BuscaParalela(num_threads);
-
                 clock_gettime(CLOCK_MONOTONIC, &fim_p);
 
                 tempototal_p = (double)(fim_p.tv_sec - ini_p.tv_sec) + (fim_p.tv_nsec - ini_p.tv_nsec) / 1e9;
 
                 printf("Tempo da busca paralela: %f segundos \n", tempototal_p);
                 printf("Total de primos encontrados na busca paralela: %d\n", totalPrimosParalelo);
-
-                //adicionarResultado(num_threads, tempototal_p, totalPrimosParalelo);
-
+                
+                // Salvando no pointer de resultados
+                resultados_paralelo = adicionarResultado(resultados_paralelo, &n_resultados, num_threads, tempototal_p, totalPrimosParalelo);
                 break;
 
+            // Opção 3: Comparar Buscas
             case 3:
                 limparTela();
                 printf("Comparar selecionada.\n");
-                if (tempototal_s == 0.0 || tempototal_p == 0.0) {
-                    printf("Execute a busca serial primeiro para obter o tempo de referência.\n");
+                // Verificando se os resultados de busca serial e paralela estão disponíveis para comparação
+                if (resultados_paralelo == NULL || n_resultados == 0 || resultado_serial.tempo == 0.0) {
+                    printf("Execute a busca serial e paralela primeiro para obter os tempos de referência.\n");
                 } else {
-                    printf("%f segundos (Serial) vs %f segundos (Paralelo %d threads)\n", tempototal_s, tempototal_p, num_threads);
-                    printf("Speedup: %.2f%%\n\n", (tempototal_s / tempototal_p) * 100);
+                    printResultados(resultado_serial, resultados_paralelo, n_resultados); 
                 }
-                /*
-                if (resultado_serial.tempo == 0.0) {
-                    printf("Execute a busca serial primeiro para obter o tempo de referência.\n");
-                } else {
-                    printResultados();
-                }
-                */
                 break;
             default:
                 printf("Opção inválida. Tente novamente.\n");
@@ -350,9 +357,9 @@ int main (void){
         opcao = menu();
     }
 
+    // Liberando memória alocada para a matriz e resultados paralelos
     Liberar_matriz(MATRIZ_LINHA, MATRIZ_COLUNA, matriz);
-
-    //free(resultados);
+    free(resultados_paralelo);
 
     return 0;
 }
